@@ -1,0 +1,8 @@
+{
+  "appId": "com.voxvend.inventory",
+  "appName": "VoxVend",
+  "webDir": "frontend",
+  "server": {
+    "androidScheme": "https"
+  }
+}

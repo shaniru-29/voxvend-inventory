@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>VoxVend Inventory</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+
+  <!-- SPLASH SCREEN -->
+  <div id="splash" class="splash">
+    <div class="splash-content">
+      <div class="splash-icon"><i class="fas fa-robot"></i></div>
+      <h1>VoxVend</h1>
+      <p>Smart Inventory System</p>
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="app" class="app hidden">
+
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-left">
+        <i class="fas fa-robot logo-icon"></i>
+        <span class="header-title">VoxVend</span>
+      </div>
+      <div class="header-right">
+        <span id="alert-badge" class="alert-badge hidden"><i class="fas fa-bell"></i></span>
+        <span class="header-sub">Inventory</span>
+      </div>
+    </header>
+
+    <!-- PAGES -->
+    <main class="pages">
+
+      <!-- DASHBOARD PAGE -->
+      <section id="page-dashboard" class="page active">
+        <div class="page-title">Dashboard</div>
+        <div class="stats-grid">
+          <div class="stat-card blue">
+            <i class="fas fa-box-open"></i>
+            <div class="stat-value" id="stat-products">--</div>
+            <div class="stat-label">Total Products</div>
+          </div>
+          <div class="stat-card light">
+            <i class="fas fa-shopping-cart"></i>
+            <div class="stat-value" id="stat-sold">--</div>
+            <div class="stat-label">Items Sold</div>
+          </div>
+          <div class="stat-card blue">
+            <i class="fas fa-peso-sign"></i>
+            <div class="stat-value" id="stat-revenue">--</div>
+            <div class="stat-label">Revenue</div>
+          </div>
+          <div class="stat-card alert-card" id="stat-alert-card">
+            <i class="fas fa-triangle-exclamation"></i>
+            <div class="stat-value" id="stat-alerts">--</div>
+            <div class="stat-label">Low Stock</div>
+          </div>
+        </div>
+
+        <!-- LOW STOCK ALERTS -->
+        <div class="section-title"><i class="fas fa-bell"></i> Low Stock Alerts</div>
+        <div id="low-stock-list" class="alert-list"></div>
+
+        <!-- BEST SELLERS -->
+        <div class="section-title"><i class="fas fa-fire"></i> Best Sellers</div>
+        <div id="best-sellers-list" class="seller-list"></div>
+      </section>
+
+      <!-- INVENTORY PAGE -->
+      <section id="page-inventory" class="page">
+        <div class="page-title">Inventory</div>
+        <div class="search-bar">
+          <i class="fas fa-search"></i>
+          <input type="text" id="search-input" placeholder="Search snacks..." oninput="filterSnacks()"/>
+        </div>
+        <button class="btn-primary full-width" onclick="openAddModal()">
+          <i class="fas fa-plus"></i> Add New Snack
+        </button>
+        <div id="snack-list" class="snack-list"></div>
+      </section>
+
+      <!-- STATISTICS PAGE -->
+      <section id="page-stats" class="page">
+        <div class="page-title">Statistics</div>
+
+        <div class="section-title"><i class="fas fa-chart-bar"></i> Category Breakdown</div>
+        <div id="category-chart" class="chart-container"></div>
+
+        <div class="section-title"><i class="fas fa-history"></i> Recent Transactions</div>
+        <div id="transactions-list" class="transactions-list"></div>
+      </section>
+
+      <!-- RECORD PURCHASE PAGE -->
+      <section id="page-purchase" class="page">
+        <div class="page-title">Record Purchase</div>
+        <div class="purchase-form">
+          <label>Select Snack</label>
+          <select id="purchase-snack" class="select-field"></select>
+          <label>Quantity</label>
+          <div class="qty-control">
+            <button onclick="changeQty(-1)">−</button>
+            <span id="qty-display">1</span>
+            <button onclick="changeQty(1)">+</button>
+          </div>
+          <div class="purchase-preview" id="purchase-preview"></div>
+          <button class="btn-primary full-width" onclick="recordPurchase()">
+            <i class="fas fa-check-circle"></i> Confirm Purchase
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+      <button class="nav-btn active" onclick="navigate('dashboard', this)">
+        <i class="fas fa-home"></i><span>Home</span>
+      </button>
+      <button class="nav-btn" onclick="navigate('inventory', this)">
+        <i class="fas fa-boxes-stacked"></i><span>Inventory</span>
+      </button>
+      <button class="nav-btn" onclick="navigate('purchase', this)">
+        <i class="fas fa-cart-plus"></i><span>Purchase</span>
+      </button>
+      <button class="nav-btn" onclick="navigate('stats', this)">
+        <i class="fas fa-chart-pie"></i><span>Stats</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ADD/EDIT SNACK MODAL -->
+  <div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span id="modal-title">Add Snack</span>
+        <button onclick="closeModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-id"/>
+        <label>Snack Name</label>
+        <input type="text" id="field-name" class="field" placeholder="e.g. Lays Classic"/>
+        <label>Category</label>
+        <select id="field-category" class="field">
+          <option value="chips">Chips</option>
+          <option value="cookies">Cookies</option>
+          <option value="candy">Candy</option>
+          <option value="drinks">Drinks</option>
+          <option value="nuts">Nuts</option>
+          <option value="general">General</option>
+        </select>
+        <label>Price (₱)</label>
+        <input type="number" id="field-price" class="field" placeholder="25"/>
+        <label>Stock</label>
+        <input type="number" id="field-stock" class="field" placeholder="50"/>
+        <label>Low Stock Threshold</label>
+        <input type="number" id="field-threshold" class="field" placeholder="10"/>
+        <button class="btn-primary full-width" onclick="saveSnack()">
+          <i class="fas fa-save"></i> Save
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
