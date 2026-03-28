@@ -3,6 +3,7 @@
   "appName": "VoxVend",
   "webDir": "frontend",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "http",
+    "cleartext": true
   }
 }

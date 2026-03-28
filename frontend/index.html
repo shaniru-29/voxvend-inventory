@@ -10,7 +10,7 @@
 </head>
 <body>
 
-  <!-- SPLASH SCREEN -->
+  <!-- SPLASH -->
   <div id="splash" class="splash">
     <div class="splash-content">
       <div class="splash-icon"><i class="fas fa-robot"></i></div>
@@ -20,60 +20,63 @@
     </div>
   </div>
 
-  <!-- MAIN APP -->
-  <div id="app" class="app hidden">
+  <!-- APP -->
+  <div id="app" class="app" style="display:none;">
 
-    <!-- HEADER -->
     <header class="header">
       <div class="header-left">
         <i class="fas fa-robot logo-icon"></i>
         <span class="header-title">VoxVend</span>
       </div>
       <div class="header-right">
-        <span id="alert-badge" class="alert-badge hidden"><i class="fas fa-bell"></i></span>
+        <span id="alert-badge" class="alert-badge" style="display:none;">
+          <i class="fas fa-bell"></i>
+          <span id="alert-count">0</span>
+        </span>
         <span class="header-sub">Inventory</span>
       </div>
     </header>
 
-    <!-- PAGES -->
     <main class="pages">
 
-      <!-- DASHBOARD PAGE -->
+      <!-- DASHBOARD -->
       <section id="page-dashboard" class="page active">
         <div class="page-title">Dashboard</div>
         <div class="stats-grid">
           <div class="stat-card blue">
             <i class="fas fa-box-open"></i>
-            <div class="stat-value" id="stat-products">--</div>
+            <div class="stat-value" id="stat-products">0</div>
             <div class="stat-label">Total Products</div>
           </div>
           <div class="stat-card light">
             <i class="fas fa-shopping-cart"></i>
-            <div class="stat-value" id="stat-sold">--</div>
+            <div class="stat-value" id="stat-sold">0</div>
             <div class="stat-label">Items Sold</div>
           </div>
           <div class="stat-card blue">
             <i class="fas fa-peso-sign"></i>
-            <div class="stat-value" id="stat-revenue">--</div>
+            <div class="stat-value" id="stat-revenue">₱0</div>
             <div class="stat-label">Revenue</div>
           </div>
-          <div class="stat-card alert-card" id="stat-alert-card">
+          <div class="stat-card alert-card" id="alert-card">
             <i class="fas fa-triangle-exclamation"></i>
-            <div class="stat-value" id="stat-alerts">--</div>
+            <div class="stat-value" id="stat-alerts">0</div>
             <div class="stat-label">Low Stock</div>
           </div>
         </div>
 
-        <!-- LOW STOCK ALERTS -->
         <div class="section-title"><i class="fas fa-bell"></i> Low Stock Alerts</div>
-        <div id="low-stock-list" class="alert-list"></div>
+        <div id="low-stock-list" class="alert-list">
+          <div class="empty-state">Checking stock...</div>
+        </div>
 
-        <!-- BEST SELLERS -->
         <div class="section-title"><i class="fas fa-fire"></i> Best Sellers</div>
-        <div id="best-sellers-list" class="seller-list"></div>
+        <div id="best-sellers-list" class="seller-list">
+          <div class="empty-state">Loading...</div>
+        </div>
       </section>
 
-      <!-- INVENTORY PAGE -->
+      <!-- INVENTORY -->
       <section id="page-inventory" class="page">
         <div class="page-title">Inventory</div>
         <div class="search-bar">
@@ -83,36 +86,88 @@
         <button class="btn-primary full-width" onclick="openAddModal()">
           <i class="fas fa-plus"></i> Add New Snack
         </button>
-        <div id="snack-list" class="snack-list"></div>
+        <div id="snack-list" class="snack-list">
+          <div class="empty-state">Loading inventory...</div>
+        </div>
       </section>
 
-      <!-- STATISTICS PAGE -->
-      <section id="page-stats" class="page">
-        <div class="page-title">Statistics</div>
-
-        <div class="section-title"><i class="fas fa-chart-bar"></i> Category Breakdown</div>
-        <div id="category-chart" class="chart-container"></div>
-
-        <div class="section-title"><i class="fas fa-history"></i> Recent Transactions</div>
-        <div id="transactions-list" class="transactions-list"></div>
-      </section>
-
-      <!-- RECORD PURCHASE PAGE -->
-      <section id="page-purchase" class="page">
-        <div class="page-title">Record Purchase</div>
+      <!-- RESTOCK -->
+      <section id="page-restock" class="page">
+        <div class="page-title">Restock</div>
         <div class="purchase-form">
-          <label>Select Snack</label>
-          <select id="purchase-snack" class="select-field"></select>
-          <label>Quantity</label>
+          <label>Select Snack to Restock</label>
+          <select id="restock-snack" class="select-field" onchange="updateRestockPreview()"></select>
+          <label>Quantity to Add</label>
           <div class="qty-control">
-            <button onclick="changeQty(-1)">−</button>
-            <span id="qty-display">1</span>
-            <button onclick="changeQty(1)">+</button>
+            <button onclick="changeRestockQty(-1)">−</button>
+            <span id="restock-qty-display">10</span>
+            <button onclick="changeRestockQty(1)">+</button>
           </div>
-          <div class="purchase-preview" id="purchase-preview"></div>
-          <button class="btn-primary full-width" onclick="recordPurchase()">
-            <i class="fas fa-check-circle"></i> Confirm Purchase
+          <div class="purchase-preview" id="restock-preview">
+            Select a snack to restock
+          </div>
+          <button class="btn-primary full-width" onclick="confirmRestock()">
+            <i class="fas fa-boxes-stacked"></i> Confirm Restock
           </button>
+        </div>
+
+        <div class="section-title"><i class="fas fa-history"></i> Restock History</div>
+        <div id="restock-history" class="transactions-list">
+          <div class="empty-state">No restock history yet</div>
+        </div>
+      </section>
+
+      <!-- DEMOGRAPHICS -->
+      <section id="page-demographics" class="page">
+        <div class="page-title">Demographics</div>
+
+        <!-- Peak Info -->
+        <div class="demo-peak-row">
+          <div class="demo-peak-card">
+            <i class="fas fa-clock"></i>
+            <div class="demo-peak-value" id="peak-hour">--</div>
+            <div class="demo-peak-label">Peak Hour</div>
+          </div>
+          <div class="demo-peak-card">
+            <i class="fas fa-calendar-day"></i>
+            <div class="demo-peak-value" id="peak-day">--</div>
+            <div class="demo-peak-label">Peak Day</div>
+          </div>
+          <div class="demo-peak-card">
+            <i class="fas fa-receipt"></i>
+            <div class="demo-peak-value" id="total-txns">--</div>
+            <div class="demo-peak-label">Total Transactions</div>
+          </div>
+        </div>
+
+        <!-- Category Sales -->
+        <div class="section-title"><i class="fas fa-tag"></i> Sales by Category</div>
+        <div id="category-chart" class="chart-container">
+          <div class="empty-state">Loading...</div>
+        </div>
+
+        <!-- Top Snacks -->
+        <div class="section-title"><i class="fas fa-trophy"></i> Top Selling Snacks</div>
+        <div id="top-snacks-list" class="seller-list">
+          <div class="empty-state">Loading...</div>
+        </div>
+
+        <!-- Daily Sales -->
+        <div class="section-title"><i class="fas fa-calendar-week"></i> Sales by Day</div>
+        <div id="daily-chart" class="chart-container">
+          <div class="empty-state">Loading...</div>
+        </div>
+
+        <!-- Hourly Sales -->
+        <div class="section-title"><i class="fas fa-clock"></i> Sales by Hour</div>
+        <div id="hourly-chart" class="chart-container">
+          <div class="empty-state">Loading...</div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="section-title"><i class="fas fa-history"></i> Recent Transactions</div>
+        <div id="transactions-list" class="transactions-list">
+          <div class="empty-state">Loading...</div>
         </div>
       </section>
 
@@ -126,17 +181,17 @@
       <button class="nav-btn" onclick="navigate('inventory', this)">
         <i class="fas fa-boxes-stacked"></i><span>Inventory</span>
       </button>
-      <button class="nav-btn" onclick="navigate('purchase', this)">
-        <i class="fas fa-cart-plus"></i><span>Purchase</span>
+      <button class="nav-btn" onclick="navigate('restock', this)">
+        <i class="fas fa-truck-ramp-box"></i><span>Restock</span>
       </button>
-      <button class="nav-btn" onclick="navigate('stats', this)">
-        <i class="fas fa-chart-pie"></i><span>Stats</span>
+      <button class="nav-btn" onclick="navigate('demographics', this)">
+        <i class="fas fa-chart-pie"></i><span>Analytics</span>
       </button>
     </nav>
   </div>
 
-  <!-- ADD/EDIT SNACK MODAL -->
-  <div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal()">
+  <!-- ADD/EDIT MODAL -->
+  <div id="modal-overlay" class="modal-overlay" style="display:none;" onclick="closeModal()">
     <div class="modal" onclick="event.stopPropagation()">
       <div class="modal-header">
         <span id="modal-title">Add Snack</span>
@@ -157,19 +212,33 @@
         </select>
         <label>Price (₱)</label>
         <input type="number" id="field-price" class="field" placeholder="25"/>
-        <label>Stock</label>
+        <label>Initial Stock</label>
         <input type="number" id="field-stock" class="field" placeholder="50"/>
         <label>Low Stock Threshold</label>
         <input type="number" id="field-threshold" class="field" placeholder="10"/>
         <button class="btn-primary full-width" onclick="saveSnack()">
-          <i class="fas fa-save"></i> Save
+          <i class="fas fa-save"></i> Save Snack
         </button>
       </div>
     </div>
   </div>
 
+  <!-- LOW STOCK ALERT MODAL -->
+  <div id="alert-modal" class="modal-overlay" style="display:none;">
+    <div class="modal alert-modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span>⚠️ Low Stock Alert!</span>
+        <button onclick="closeAlertModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="alert-modal-body" class="modal-body"></div>
+      <button class="btn-primary full-width" style="margin-top:12px;" onclick="closeAlertModal()">
+        OK, Got it!
+      </button>
+    </div>
+  </div>
+
   <!-- TOAST -->
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast" style="display:none;"></div>
 
   <script src="js/app.js"></script>
 </body>
