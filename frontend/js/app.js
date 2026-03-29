@@ -40,7 +40,7 @@ async function sendLowStockNotification(items) {
 
 
 // ─── CONFIG ───────────────────────────────
-const API_BASE = 'https://voxvend-inventory.onrender.com';
+const API_BASE = 'https://voxvend-inventory.onrender.com/api';
 // ⚠️ Change this IP if your Flask server IP changes!
 
 let allSnacks = [];

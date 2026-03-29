@@ -5,10 +5,12 @@ from firebase_admin import credentials, firestore
 from datetime import datetime
 import os
 import json
+import requests as http_requests
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
+# ─── FIREBASE INIT ────────────────────────
 firebase_creds = os.environ.get('FIREBASE_CREDENTIALS')
 if firebase_creds:
     cred_dict = json.loads(firebase_creds)
@@ -19,18 +21,57 @@ else:
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# ─────────────────────────────────────────
-# HEALTH CHECK
-# ─────────────────────────────────────────
+# ─── SMS CONFIG ───────────────────────────
+SEMAPHORE_API_KEY = os.environ.get('SEMAPHORE_API_KEY', 'YOUR_SEMAPHORE_API_KEY')
+OWNER_PHONE = os.environ.get('OWNER_PHONE', 'YOUR_PHONE_NUMBER')
+# Phone format: 09XXXXXXXXX (Philippine number)
 
+def send_sms(message):
+    """Send SMS via Semaphore"""
+    try:
+        response = http_requests.post(
+            'https://api.semaphore.co/api/v4/messages',
+            data={
+                'apikey': SEMAPHORE_API_KEY,
+                'number': OWNER_PHONE,
+                'message': message,
+                'sendername': 'VoxVend'
+            }
+        )
+        result = response.json()
+        print(f"SMS sent: {result}")
+        return True
+    except Exception as e:
+        print(f"SMS error: {e}")
+        return False
+
+def check_and_notify_low_stock():
+    """Check all snacks and send SMS if any are low stock"""
+    try:
+        low_stock_items = []
+        for doc in db.collection('snacks').stream():
+            s = doc.to_dict()
+            if s.get('stock', 0) <= s.get('threshold', 10):
+                low_stock_items.append(s)
+
+        if low_stock_items:
+            message = "⚠️ VoxVend Low Stock Alert!\n\n"
+            for item in low_stock_items:
+                message += f"• {item['name']}: {item['stock']} left (threshold: {item.get('threshold', 10)})\n"
+            message += "\nPlease restock soon!"
+            send_sms(message)
+
+        return low_stock_items
+    except Exception as e:
+        print(f"Low stock check error: {e}")
+        return []
+
+# ─── HEALTH CHECK ─────────────────────────
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok'}), 200
+    return jsonify({'status': 'ok', 'message': 'VoxVend API is running'}), 200
 
-# ─────────────────────────────────────────
-# SNACKS
-# ─────────────────────────────────────────
-
+# ─── SNACKS ───────────────────────────────
 @app.route('/api/snacks', methods=['GET'])
 def get_snacks():
     try:
@@ -49,6 +90,7 @@ def add_snack():
         data = request.get_json(force=True)
         if not data or not data.get('name'):
             return jsonify({'error': 'Name is required'}), 400
+
         snack = {
             'name': str(data['name']),
             'category': str(data.get('category', 'general')),
@@ -59,6 +101,11 @@ def add_snack():
             'created_at': datetime.utcnow().isoformat()
         }
         ref = db.collection('snacks').add(snack)
+
+        # Check if new snack is already low stock
+        if snack['stock'] <= snack['threshold']:
+            send_sms(f"⚠️ VoxVend Alert: New snack '{snack['name']}' added with low stock ({snack['stock']} units)!")
+
         return jsonify({'id': ref[1].id, 'message': 'Snack added'}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -74,6 +121,12 @@ def update_snack(snack_id):
         if 'stock' in data: update['stock'] = int(data['stock'])
         if 'threshold' in data: update['threshold'] = int(data['threshold'])
         db.collection('snacks').document(snack_id).update(update)
+
+        # Check low stock after update
+        if 'stock' in data and 'threshold' in data:
+            if int(data['stock']) <= int(data['threshold']):
+                send_sms(f"⚠️ VoxVend Alert: '{data.get('name', 'A snack')}' is low on stock ({data['stock']} units)!")
+
         return jsonify({'message': 'Snack updated'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -93,44 +146,60 @@ def restock_snack(snack_id):
         quantity = int(data.get('quantity', 0))
         if quantity <= 0:
             return jsonify({'error': 'Quantity must be greater than 0'}), 400
+
         ref = db.collection('snacks').document(snack_id)
         doc = ref.get()
         if not doc.exists:
             return jsonify({'error': 'Snack not found'}), 404
+
+        snack = doc.to_dict()
+        new_stock = snack['stock'] + quantity
         ref.update({'stock': firestore.Increment(quantity)})
+
         db.collection('restock_logs').add({
             'snack_id': snack_id,
-            'snack_name': doc.to_dict()['name'],
+            'snack_name': snack['name'],
             'quantity_added': quantity,
+            'previous_stock': snack['stock'],
+            'new_stock': new_stock,
             'timestamp': datetime.utcnow().isoformat()
         })
-        return jsonify({'message': 'Restocked successfully'}), 200
+
+        # Send SMS confirmation
+        send_sms(f"✅ VoxVend Restock: '{snack['name']}' restocked by {quantity} units. New stock: {new_stock}")
+
+        return jsonify({
+            'message': 'Restocked successfully',
+            'new_stock': new_stock
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ─────────────────────────────────────────
-# VENDING MACHINE PURCHASE (from machine only)
-# ─────────────────────────────────────────
-
+# ─── PURCHASE (from vending machine) ──────
 @app.route('/api/purchase', methods=['POST'])
 def record_purchase():
     try:
         data = request.get_json(force=True)
         snack_id = data.get('snack_id')
         quantity = int(data.get('quantity', 1))
+
         if not snack_id:
             return jsonify({'error': 'snack_id required'}), 400
+
         ref = db.collection('snacks').document(snack_id)
         doc = ref.get()
         if not doc.exists:
             return jsonify({'error': 'Snack not found'}), 404
+
         snack = doc.to_dict()
         if snack['stock'] < quantity:
             return jsonify({'error': 'Insufficient stock'}), 400
+
         ref.update({
             'stock': firestore.Increment(-quantity),
             'total_sold': firestore.Increment(quantity)
         })
+
         db.collection('transactions').add({
             'snack_id': snack_id,
             'snack_name': snack['name'],
@@ -140,7 +209,17 @@ def record_purchase():
             'total': snack['price'] * quantity,
             'timestamp': datetime.utcnow().isoformat()
         })
+
         remaining = snack['stock'] - quantity
+
+        # Send SMS if low stock after purchase
+        if remaining <= snack.get('threshold', 10):
+            send_sms(
+                f"⚠️ VoxVend Low Stock Alert!\n"
+                f"'{snack['name']}' only has {remaining} units left.\n"
+                f"Please restock soon!"
+            )
+
         return jsonify({
             'message': 'Purchase recorded',
             'remaining_stock': remaining,
@@ -149,10 +228,7 @@ def record_purchase():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ─────────────────────────────────────────
-# STATISTICS
-# ─────────────────────────────────────────
-
+# ─── STATISTICS ───────────────────────────
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     try:
@@ -180,7 +256,11 @@ def get_stats():
                     'threshold': s.get('threshold', 10)
                 })
 
-        best_sellers = sorted(snacks, key=lambda x: x.get('total_sold', 0), reverse=True)[:5]
+        best_sellers = sorted(
+            snacks,
+            key=lambda x: x.get('total_sold', 0),
+            reverse=True
+        )[:5]
 
         return jsonify({
             'total_revenue': total_revenue,
@@ -207,10 +287,7 @@ def get_transactions():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ─────────────────────────────────────────
-# DEMOGRAPHICS
-# ─────────────────────────────────────────
-
+# ─── DEMOGRAPHICS ─────────────────────────
 @app.route('/api/demographics', methods=['GET'])
 def get_demographics():
     try:
@@ -218,13 +295,9 @@ def get_demographics():
         for doc in db.collection('transactions').stream():
             txns.append(doc.to_dict())
 
-        # Sales by category
         category_sales = {}
-        # Sales by hour
         hourly_sales = {str(i): 0 for i in range(24)}
-        # Sales by day
         daily_sales = {}
-        # Top snacks
         snack_sales = {}
 
         for t in txns:
@@ -246,8 +319,6 @@ def get_demographics():
             snack_sales[name] = snack_sales.get(name, 0) + t.get('quantity', 0)
 
         top_snacks = sorted(snack_sales.items(), key=lambda x: x[1], reverse=True)[:5]
-
-        # Peak hour
         peak_hour = max(hourly_sales, key=hourly_sales.get) if hourly_sales else '0'
         peak_day = max(daily_sales, key=daily_sales.get) if daily_sales else 'N/A'
 
@@ -259,6 +330,19 @@ def get_demographics():
             'peak_hour': peak_hour,
             'peak_day': peak_day,
             'total_transactions': len(txns)
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ─── MANUAL LOW STOCK CHECK + SMS ─────────
+@app.route('/api/check-low-stock', methods=['GET'])
+def check_low_stock():
+    try:
+        low_items = check_and_notify_low_stock()
+        return jsonify({
+            'low_stock_count': len(low_items),
+            'items': low_items,
+            'sms_sent': len(low_items) > 0
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
