@@ -46,19 +46,24 @@ def send_telegram(message):
         return False
 
 def check_and_notify_low_stock():
-    """Check all snacks and send Telegram if any are low stock"""
+    """Check all snacks and always send ALL low stock items together"""
     try:
         low_stock_items = []
         for doc in db.collection('snacks').stream():
             s = doc.to_dict()
+            s['id'] = doc.id
             if s.get('stock', 0) <= s.get('threshold', 10):
                 low_stock_items.append(s)
 
         if low_stock_items:
-            message = "⚠️ <b>VoxVend Low Stock Alert!</b>\n\n"
-            for item in low_stock_items:
-                message += f"• <b>{item['name']}</b>: {item['stock']} left (threshold: {item.get('threshold', 10)})\n"
-            message += "\n🛒 Please restock soon!"
+            # Always send ALL low stock items together
+            message = "⚠️ <b>VoxVend Low Stock Alert!</b>\n"
+            message += f"<b>{len(low_stock_items)} item(s) need restocking!</b>\n\n"
+            for i, item in enumerate(low_stock_items, 1):
+                status = "🔴 Critical" if item['stock'] == 0 else "🟡 Low"
+                message += f"{i}. <b>{item['name']}</b>\n"
+                message += f"   Stock: {item['stock']} | Threshold: {item.get('threshold', 10)} | {status}\n\n"
+            message += "🛒 <b>Please restock these items soon!</b>"
             send_telegram(message)
 
         return low_stock_items
@@ -222,13 +227,9 @@ def record_purchase():
 
         remaining = snack['stock'] - quantity
 
-        # Send Telegram if low stock after purchase
+        # Send ALL low stock items after purchase
         if remaining <= snack.get('threshold', 10):
-            send_telegram(
-                f"⚠️ <b>VoxVend Low Stock Alert!</b>\n"
-                f"'<b>{snack['name']}</b>' only has {remaining} units left.\n"
-                f"Please restock soon!"
-            )
+            check_and_notify_low_stock()
 
         return jsonify({
             'message': 'Purchase recorded',
