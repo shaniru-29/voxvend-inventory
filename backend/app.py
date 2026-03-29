@@ -21,32 +21,32 @@ else:
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# ─── SMS CONFIG ───────────────────────────
-SEMAPHORE_API_KEY = os.environ.get('SEMAPHORE_API_KEY', 'YOUR_SEMAPHORE_API_KEY')
-OWNER_PHONE = os.environ.get('OWNER_PHONE', 'YOUR_PHONE_NUMBER')
-# Phone format: 09XXXXXXXXX (Philippine number)
+# ─── TELEGRAM CONFIG ──────────────────────
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
 
-def send_sms(message):
-    """Send SMS via Semaphore"""
+def send_telegram(message):
+    """Send message via Telegram Bot"""
     try:
-        response = http_requests.post(
-            'https://api.semaphore.co/api/v4/messages',
-            data={
-                'apikey': SEMAPHORE_API_KEY,
-                'number': OWNER_PHONE,
-                'message': message,
-                'sendername': 'VoxVend'
-            }
-        )
+        if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+            print("Telegram not configured")
+            return False
+
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        response = http_requests.post(url, data={
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': message,
+            'parse_mode': 'HTML'
+        })
         result = response.json()
-        print(f"SMS sent: {result}")
-        return True
+        print(f"Telegram sent: {result}")
+        return result.get('ok', False)
     except Exception as e:
-        print(f"SMS error: {e}")
+        print(f"Telegram error: {e}")
         return False
 
 def check_and_notify_low_stock():
-    """Check all snacks and send SMS if any are low stock"""
+    """Check all snacks and send Telegram if any are low stock"""
     try:
         low_stock_items = []
         for doc in db.collection('snacks').stream():
@@ -55,11 +55,11 @@ def check_and_notify_low_stock():
                 low_stock_items.append(s)
 
         if low_stock_items:
-            message = "⚠️ VoxVend Low Stock Alert!\n\n"
+            message = "⚠️ <b>VoxVend Low Stock Alert!</b>\n\n"
             for item in low_stock_items:
-                message += f"• {item['name']}: {item['stock']} left (threshold: {item.get('threshold', 10)})\n"
-            message += "\nPlease restock soon!"
-            send_sms(message)
+                message += f"• <b>{item['name']}</b>: {item['stock']} left (threshold: {item.get('threshold', 10)})\n"
+            message += "\n🛒 Please restock soon!"
+            send_telegram(message)
 
         return low_stock_items
     except Exception as e:
@@ -102,9 +102,12 @@ def add_snack():
         }
         ref = db.collection('snacks').add(snack)
 
-        # Check if new snack is already low stock
+        # Notify if new snack is already low stock
         if snack['stock'] <= snack['threshold']:
-            send_sms(f"⚠️ VoxVend Alert: New snack '{snack['name']}' added with low stock ({snack['stock']} units)!")
+            send_telegram(
+                f"⚠️ <b>VoxVend Alert!</b>\n"
+                f"New snack '<b>{snack['name']}</b>' added with low stock ({snack['stock']} units)!"
+            )
 
         return jsonify({'id': ref[1].id, 'message': 'Snack added'}), 201
     except Exception as e:
@@ -122,10 +125,13 @@ def update_snack(snack_id):
         if 'threshold' in data: update['threshold'] = int(data['threshold'])
         db.collection('snacks').document(snack_id).update(update)
 
-        # Check low stock after update
+        # Notify if updated stock is low
         if 'stock' in data and 'threshold' in data:
             if int(data['stock']) <= int(data['threshold']):
-                send_sms(f"⚠️ VoxVend Alert: '{data.get('name', 'A snack')}' is low on stock ({data['stock']} units)!")
+                send_telegram(
+                    f"⚠️ <b>VoxVend Alert!</b>\n"
+                    f"'<b>{data.get('name', 'A snack')}</b>' is low on stock ({data['stock']} units)!"
+                )
 
         return jsonify({'message': 'Snack updated'}), 200
     except Exception as e:
@@ -165,8 +171,12 @@ def restock_snack(snack_id):
             'timestamp': datetime.utcnow().isoformat()
         })
 
-        # Send SMS confirmation
-        send_sms(f"✅ VoxVend Restock: '{snack['name']}' restocked by {quantity} units. New stock: {new_stock}")
+        # Send Telegram confirmation
+        send_telegram(
+            f"✅ <b>VoxVend Restock!</b>\n"
+            f"'<b>{snack['name']}</b>' restocked by {quantity} units.\n"
+            f"New stock: {new_stock}"
+        )
 
         return jsonify({
             'message': 'Restocked successfully',
@@ -212,11 +222,11 @@ def record_purchase():
 
         remaining = snack['stock'] - quantity
 
-        # Send SMS if low stock after purchase
+        # Send Telegram if low stock after purchase
         if remaining <= snack.get('threshold', 10):
-            send_sms(
-                f"⚠️ VoxVend Low Stock Alert!\n"
-                f"'{snack['name']}' only has {remaining} units left.\n"
+            send_telegram(
+                f"⚠️ <b>VoxVend Low Stock Alert!</b>\n"
+                f"'<b>{snack['name']}</b>' only has {remaining} units left.\n"
                 f"Please restock soon!"
             )
 
@@ -334,7 +344,7 @@ def get_demographics():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ─── MANUAL LOW STOCK CHECK + SMS ─────────
+# ─── LOW STOCK CHECK ──────────────────────
 @app.route('/api/check-low-stock', methods=['GET'])
 def check_low_stock():
     try:
@@ -342,7 +352,7 @@ def check_low_stock():
         return jsonify({
             'low_stock_count': len(low_items),
             'items': low_items,
-            'sms_sent': len(low_items) > 0
+            'telegram_sent': len(low_items) > 0
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
