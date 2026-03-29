@@ -58,7 +58,7 @@
             <div class="stat-value" id="stat-revenue">₱0</div>
             <div class="stat-label">Revenue</div>
           </div>
-          <div class="stat-card alert-card" id="alert-card">
+          <div class="stat-card alert-card">
             <i class="fas fa-triangle-exclamation"></i>
             <div class="stat-value" id="stat-alerts">0</div>
             <div class="stat-label">Low Stock</div>
@@ -91,29 +91,29 @@
         </div>
       </section>
 
-      <!-- RESTOCK -->
-      <section id="page-restock" class="page">
-        <div class="page-title">Restock</div>
+      <!-- RECORD SALE -->
+      <section id="page-sale" class="page">
+        <div class="page-title">Record Sale</div>
         <div class="purchase-form">
-          <label>Select Snack to Restock</label>
-          <select id="restock-snack" class="select-field" onchange="updateRestockPreview()"></select>
-          <label>Quantity to Add</label>
+          <label>Select Snack</label>
+          <select id="sale-snack" class="select-field" onchange="updateSalePreview()"></select>
+          <label>Quantity Sold</label>
           <div class="qty-control">
-            <button onclick="changeRestockQty(-1)">−</button>
-            <span id="restock-qty-display">10</span>
-            <button onclick="changeRestockQty(1)">+</button>
+            <button onclick="changeSaleQty(-1)">−</button>
+            <span id="sale-qty-display">1</span>
+            <button onclick="changeSaleQty(1)">+</button>
           </div>
-          <div class="purchase-preview" id="restock-preview">
-            Select a snack to restock
+          <div class="purchase-preview" id="sale-preview">
+            Select a snack to see preview
           </div>
-          <button class="btn-primary full-width" onclick="confirmRestock()">
-            <i class="fas fa-boxes-stacked"></i> Confirm Restock
+          <button class="btn-primary full-width" onclick="confirmSale()">
+            <i class="fas fa-check-circle"></i> Confirm Sale
           </button>
         </div>
 
-        <div class="section-title"><i class="fas fa-history"></i> Restock History</div>
-        <div id="restock-history" class="transactions-list">
-          <div class="empty-state">No restock history yet</div>
+        <div class="section-title"><i class="fas fa-history"></i> Recent Sales</div>
+        <div id="recent-sales-list" class="transactions-list">
+          <div class="empty-state">No sales recorded yet</div>
         </div>
       </section>
 
@@ -121,7 +121,6 @@
       <section id="page-demographics" class="page">
         <div class="page-title">Demographics</div>
 
-        <!-- Peak Info -->
         <div class="demo-peak-row">
           <div class="demo-peak-card">
             <i class="fas fa-clock"></i>
@@ -136,35 +135,30 @@
           <div class="demo-peak-card">
             <i class="fas fa-receipt"></i>
             <div class="demo-peak-value" id="total-txns">--</div>
-            <div class="demo-peak-label">Total Transactions</div>
+            <div class="demo-peak-label">Transactions</div>
           </div>
         </div>
 
-        <!-- Category Sales -->
         <div class="section-title"><i class="fas fa-tag"></i> Sales by Category</div>
         <div id="category-chart" class="chart-container">
           <div class="empty-state">Loading...</div>
         </div>
 
-        <!-- Top Snacks -->
         <div class="section-title"><i class="fas fa-trophy"></i> Top Selling Snacks</div>
         <div id="top-snacks-list" class="seller-list">
           <div class="empty-state">Loading...</div>
         </div>
 
-        <!-- Daily Sales -->
         <div class="section-title"><i class="fas fa-calendar-week"></i> Sales by Day</div>
         <div id="daily-chart" class="chart-container">
           <div class="empty-state">Loading...</div>
         </div>
 
-        <!-- Hourly Sales -->
         <div class="section-title"><i class="fas fa-clock"></i> Sales by Hour</div>
         <div id="hourly-chart" class="chart-container">
           <div class="empty-state">Loading...</div>
         </div>
 
-        <!-- Recent Transactions -->
         <div class="section-title"><i class="fas fa-history"></i> Recent Transactions</div>
         <div id="transactions-list" class="transactions-list">
           <div class="empty-state">Loading...</div>
@@ -181,8 +175,8 @@
       <button class="nav-btn" onclick="navigate('inventory', this)">
         <i class="fas fa-boxes-stacked"></i><span>Inventory</span>
       </button>
-      <button class="nav-btn" onclick="navigate('restock', this)">
-        <i class="fas fa-truck-ramp-box"></i><span>Restock</span>
+      <button class="nav-btn" onclick="navigate('sale', this)">
+        <i class="fas fa-cash-register"></i><span>Record Sale</span>
       </button>
       <button class="nav-btn" onclick="navigate('demographics', this)">
         <i class="fas fa-chart-pie"></i><span>Analytics</span>

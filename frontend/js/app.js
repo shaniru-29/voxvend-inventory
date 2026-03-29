@@ -1,50 +1,8 @@
-// ─── NOTIFICATIONS SETUP ──────────────────
-async function setupNotifications() {
-  try {
-    const { LocalNotifications } = window.Capacitor?.Plugins || {};
-    if (!LocalNotifications) return;
-
-    const permission = await LocalNotifications.requestPermissions();
-    console.log('Notification permission:', permission.display);
-  } catch (e) {
-    console.log('Notifications not available:', e);
-  }
-}
-
-async function sendLowStockNotification(items) {
-  try {
-    const { LocalNotifications } = window.Capacitor?.Plugins || {};
-
-    // Vibrate the phone
-    if (navigator.vibrate) {
-      navigator.vibrate([400, 200, 400, 200, 400]);
-    }
-
-    if (!LocalNotifications) return;
-
-    const notifications = items.map((item, index) => ({
-      title: '⚠️ VoxVend Low Stock Alert!',
-      body: `${item.name} only has ${item.stock} left! Please restock soon.`,
-      id: index + 1,
-      schedule: { at: new Date(Date.now() + 500) },
-      sound: 'default',
-      actionTypeId: '',
-      extra: null
-    }));
-
-    await LocalNotifications.schedule({ notifications });
-  } catch (e) {
-    console.log('Notification error:', e);
-  }
-}
-
-
 // ─── CONFIG ───────────────────────────────
 const API_BASE = 'https://voxvend-inventory.onrender.com/api';
-// ⚠️ Change this IP if your Flask server IP changes!
 
 let allSnacks = [];
-let restockQty = 10;
+let saleQty = 1;
 let currentEditId = null;
 let lowStockAlerted = false;
 
@@ -55,15 +13,24 @@ window.addEventListener('load', () => {
     document.getElementById('splash').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     loadDashboard();
-    // Check low stock every 5 minutes automatically
     setInterval(checkLowStockSilently, 5 * 60 * 1000);
   }, 2500);
 });
 
+async function setupNotifications() {
+  try {
+    const { LocalNotifications } = window.Capacitor?.Plugins || {};
+    if (!LocalNotifications) return;
+    await LocalNotifications.requestPermissions();
+  } catch (e) {
+    console.log('Notifications not available:', e);
+  }
+}
+
 async function checkLowStockSilently() {
   const stats = await api('/stats');
   if (stats && stats.low_stock_alerts.length > 0) {
-    sendLowStockNotification(stats.low_stock_alerts);
+    triggerLowStockAlert(stats.low_stock_alerts);
   }
 }
 
@@ -75,7 +42,7 @@ function navigate(page, btn) {
   btn.classList.add('active');
   if (page === 'dashboard') loadDashboard();
   if (page === 'inventory') loadInventory();
-  if (page === 'restock') loadRestockPage();
+  if (page === 'sale') loadSalePage();
   if (page === 'demographics') loadDemographics();
 }
 
@@ -84,7 +51,7 @@ async function api(endpoint, method = 'GET', body = null) {
   try {
     const opts = {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' }
     };
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(API_BASE + endpoint, opts);
@@ -108,12 +75,9 @@ function showToast(msg, type = '') {
 
 // ─── VIBRATE + SOUND ALERT ────────────────
 function triggerLowStockAlert(items) {
-  // Vibrate phone
   if (navigator.vibrate) {
     navigator.vibrate([300, 100, 300, 100, 300]);
   }
-
-  // Play alert sound
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     [0, 0.3, 0.6].forEach(delay => {
@@ -131,8 +95,6 @@ function triggerLowStockAlert(items) {
   } catch (e) {
     console.log('Audio not supported');
   }
-
-  // Show alert modal
   const body = document.getElementById('alert-modal-body');
   body.innerHTML = items.map(s => `
     <div class="alert-item" style="margin-bottom:8px;">
@@ -158,7 +120,7 @@ async function loadDashboard() {
     document.getElementById('stat-sold').textContent = '0';
     document.getElementById('stat-revenue').textContent = '₱0';
     document.getElementById('stat-alerts').textContent = '0';
-    document.getElementById('low-stock-list').innerHTML = '<div class="empty-state">Could not load data. Check connection.</div>';
+    document.getElementById('low-stock-list').innerHTML = '<div class="empty-state">Could not load. Check connection.</div>';
     document.getElementById('best-sellers-list').innerHTML = '<div class="empty-state">No data</div>';
     return;
   }
@@ -168,24 +130,19 @@ async function loadDashboard() {
   document.getElementById('stat-revenue').textContent = '₱' + Number(stats.total_revenue).toFixed(2);
   document.getElementById('stat-alerts').textContent = stats.low_stock_alerts.length;
 
-  // Low stock badge
   const badge = document.getElementById('alert-badge');
   const count = document.getElementById('alert-count');
   if (stats.low_stock_alerts.length > 0) {
     badge.style.display = 'flex';
     count.textContent = stats.low_stock_alerts.length;
-
-    // Trigger vibration + sound only once per session
     if (!lowStockAlerted) {
-        lowStockAlerted = true;
-        triggerLowStockAlert(stats.low_stock_alerts);
-        sendLowStockNotification(stats.low_stock_alerts);
-}
+      lowStockAlerted = true;
+      triggerLowStockAlert(stats.low_stock_alerts);
+    }
   } else {
     badge.style.display = 'none';
   }
 
-  // Low stock list
   const lowList = document.getElementById('low-stock-list');
   lowList.innerHTML = stats.low_stock_alerts.length === 0
     ? '<div class="empty-state">✅ All stocks are sufficient</div>'
@@ -199,7 +156,6 @@ async function loadDashboard() {
         </div>
       `).join('');
 
-  // Best sellers
   const sellerList = document.getElementById('best-sellers-list');
   const maxSold = stats.best_sellers[0]?.total_sold || 1;
   sellerList.innerHTML = stats.best_sellers.length === 0
@@ -301,7 +257,6 @@ async function saveSnack() {
   if (isNaN(stock) || stock < 0) { showToast('Please enter a valid stock', 'error'); return; }
 
   const data = { name, category, price, stock, threshold: isNaN(threshold) ? 10 : threshold };
-
   showToast('Saving...', '');
 
   const result = currentEditId
@@ -311,7 +266,7 @@ async function saveSnack() {
   if (result) {
     showToast(currentEditId ? '✅ Snack updated!' : '✅ Snack added!', 'success');
     closeModal();
-    loadStockAlerted = false;
+    lowStockAlerted = false;
     await loadInventory();
     await loadDashboard();
   } else {
@@ -331,67 +286,100 @@ async function deleteSnack(id, name) {
   }
 }
 
-// ─── RESTOCK ──────────────────────────────
-async function loadRestockPage() {
+// ─── RECORD SALE ──────────────────────────
+async function loadSalePage() {
   const data = await api('/snacks');
   allSnacks = data || [];
 
-  const sel = document.getElementById('restock-snack');
+  const sel = document.getElementById('sale-snack');
   sel.innerHTML = allSnacks.length === 0
-    ? '<option>No snacks found</option>'
+    ? '<option>No snacks available</option>'
     : allSnacks.map(s =>
-        `<option value="${s.id}" data-name="${s.name}" data-stock="${s.stock}">
-          ${s.name} (Current: ${s.stock})
+        `<option value="${s.id}" data-name="${s.name}" data-price="${s.price}" data-stock="${s.stock}">
+          ${s.name} (Stock: ${s.stock}) - ₱${s.price}
         </option>`
       ).join('');
 
-  restockQty = 10;
-  document.getElementById('restock-qty-display').textContent = restockQty;
-  updateRestockPreview();
-
-  // Load restock history
-  loadRestockHistory();
+  saleQty = 1;
+  document.getElementById('sale-qty-display').textContent = 1;
+  updateSalePreview();
+  loadRecentSales();
 }
 
-async function loadRestockHistory() {
-  const data = await api('/snacks');
-  // Show restock logs from Firestore if available
-  const histEl = document.getElementById('restock-history');
-  histEl.innerHTML = '<div class="empty-state">No restock history yet</div>';
+function changeSaleQty(delta) {
+  saleQty = Math.max(1, saleQty + delta);
+  document.getElementById('sale-qty-display').textContent = saleQty;
+  updateSalePreview();
 }
 
-function changeRestockQty(delta) {
-  restockQty = Math.max(1, restockQty + delta);
-  document.getElementById('restock-qty-display').textContent = restockQty;
-  updateRestockPreview();
-}
-
-function updateRestockPreview() {
-  const sel = document.getElementById('restock-snack');
+function updateSalePreview() {
+  const sel = document.getElementById('sale-snack');
   if (!sel || !sel.options[sel.selectedIndex]) return;
   const opt = sel.options[sel.selectedIndex];
   const name = opt.dataset.name || opt.text;
-  const current = parseInt(opt.dataset.stock) || 0;
-  document.getElementById('restock-preview').textContent =
-    `${name}: ${current} → ${current + restockQty} units`;
+  const price = parseFloat(opt.dataset.price) || 0;
+  const stock = parseInt(opt.dataset.stock) || 0;
+  const total = (price * saleQty).toFixed(2);
+  const remaining = stock - saleQty;
+
+  document.getElementById('sale-preview').innerHTML = `
+    <div style="font-size:16px;">${name} × ${saleQty} = <b>₱${total}</b></div>
+    <div style="font-size:12px;margin-top:4px;opacity:0.8;">
+      Stock after sale: ${remaining >= 0 ? remaining : '❌ Not enough stock!'}
+    </div>
+  `;
 }
 
-async function confirmRestock() {
-  const sel = document.getElementById('restock-snack');
+async function confirmSale() {
+  const sel = document.getElementById('sale-snack');
   const snack_id = sel.value;
-  if (!snack_id) { showToast('Select a snack first', 'error'); return; }
+  const opt = sel.options[sel.selectedIndex];
+  const stock = parseInt(opt.dataset.stock) || 0;
 
-  showToast('Restocking...', '');
-  const result = await api('/snacks/' + snack_id + '/restock', 'POST', { quantity: restockQty });
+  if (!snack_id) { showToast('Select a snack first', 'error'); return; }
+  if (saleQty > stock) { showToast('❌ Not enough stock!', 'error'); return; }
+
+  showToast('Recording sale...', '');
+
+  const result = await api('/purchase', 'POST', {
+    snack_id,
+    quantity: saleQty
+  });
 
   if (result) {
-    showToast('✅ Restocked successfully!', 'success');
+    showToast('✅ Sale recorded!', 'success');
     lowStockAlerted = false;
-    await loadRestockPage();
+    saleQty = 1;
+    document.getElementById('sale-qty-display').textContent = 1;
+
+    // Show low stock warning if needed
+    if (result.low_stock) {
+      showToast(`⚠️ Low stock alert sent to Telegram!`, 'error');
+    }
+
+    await loadSalePage();
     await loadDashboard();
   } else {
-    showToast('❌ Restock failed. Check connection.', 'error');
+    showToast('❌ Failed to record sale.', 'error');
   }
+}
+
+async function loadRecentSales() {
+  const txns = await api('/transactions?limit=10');
+  const el = document.getElementById('recent-sales-list');
+  el.innerHTML = !txns || txns.length === 0
+    ? '<div class="empty-state">No sales recorded yet</div>'
+    : txns.map(t => `
+        <div class="txn-item">
+          <div>
+            <div class="txn-name">${t.snack_name}</div>
+            <div class="txn-meta">
+              Qty: ${t.quantity} · ${t.timestamp ? new Date(t.timestamp).toLocaleString() : 'N/A'}
+            </div>
+          </div>
+          <div class="txn-amount">₱${Number(t.total || 0).toFixed(2)}</div>
+        </div>
+      `).join('');
 }
 
 // ─── DEMOGRAPHICS ─────────────────────────
@@ -399,18 +387,15 @@ async function loadDemographics() {
   const data = await api('/demographics');
 
   if (!data) {
-    document.getElementById('peak-hour').textContent = '--';
-    document.getElementById('peak-day').textContent = '--';
-    document.getElementById('total-txns').textContent = '0';
-    document.getElementById('category-chart').innerHTML = '<div class="empty-state">No data yet</div>';
-    document.getElementById('top-snacks-list').innerHTML = '<div class="empty-state">No data yet</div>';
-    document.getElementById('daily-chart').innerHTML = '<div class="empty-state">No data yet</div>';
-    document.getElementById('hourly-chart').innerHTML = '<div class="empty-state">No data yet</div>';
-    document.getElementById('transactions-list').innerHTML = '<div class="empty-state">No transactions yet</div>';
+    ['peak-hour','peak-day','total-txns'].forEach(id => {
+      document.getElementById(id).textContent = '--';
+    });
+    ['category-chart','top-snacks-list','daily-chart','hourly-chart','transactions-list'].forEach(id => {
+      document.getElementById(id).innerHTML = '<div class="empty-state">No data yet</div>';
+    });
     return;
   }
 
-  // Peak info
   const hour = parseInt(data.peak_hour);
   const ampm = hour >= 12 ? 'PM' : 'AM';
   const h12 = hour % 12 || 12;
@@ -418,10 +403,8 @@ async function loadDemographics() {
   document.getElementById('peak-day').textContent = data.peak_day || 'N/A';
   document.getElementById('total-txns').textContent = data.total_transactions || 0;
 
-  // Category chart
   renderChart('category-chart', data.category_sales, ICONS);
 
-  // Top snacks
   const topEl = document.getElementById('top-snacks-list');
   const maxSold = data.top_snacks[0]?.sold || 1;
   topEl.innerHTML = data.top_snacks.length === 0
@@ -439,13 +422,11 @@ async function loadDemographics() {
         </div>
       `).join('');
 
-  // Daily chart
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   const dailyData = {};
   days.forEach(d => { dailyData[d] = data.daily_sales[d] || 0; });
   renderChart('daily-chart', dailyData, {});
 
-  // Hourly chart (show only 6am-10pm)
   const hourlyData = {};
   for (let h = 6; h <= 22; h++) {
     const label = `${h % 12 || 12}${h >= 12 ? 'PM' : 'AM'}`;
@@ -453,7 +434,6 @@ async function loadDemographics() {
   }
   renderChart('hourly-chart', hourlyData, {});
 
-  // Transactions
   const txns = await api('/transactions?limit=20');
   const txnEl = document.getElementById('transactions-list');
   txnEl.innerHTML = !txns || txns.length === 0
@@ -462,7 +442,9 @@ async function loadDemographics() {
         <div class="txn-item">
           <div>
             <div class="txn-name">${t.snack_name}</div>
-            <div class="txn-meta">Qty: ${t.quantity} · ${t.timestamp ? new Date(t.timestamp).toLocaleString() : 'N/A'}</div>
+            <div class="txn-meta">
+              Qty: ${t.quantity} · ${t.timestamp ? new Date(t.timestamp).toLocaleString() : 'N/A'}
+            </div>
           </div>
           <div class="txn-amount">₱${Number(t.total || 0).toFixed(2)}</div>
         </div>
@@ -480,7 +462,7 @@ function renderChart(containerId, dataObj, icons) {
         <div class="chart-bar-row">
           <div class="chart-label">${icons[label] || ''} ${label}</div>
           <div class="chart-bar-track">
-            <div class="chart-bar-fill" style="width:${Math.max((count / maxVal) * 100, count > 0 ? 5 : 0)}%"></div>
+            <div class="chart-bar-fill" style="width:${Math.max((count/maxVal)*100, count > 0 ? 5 : 0)}%"></div>
           </div>
           <div class="chart-count">${count}</div>
         </div>
