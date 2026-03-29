@@ -3,14 +3,12 @@ from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
+import os
+import json
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-import os
-import json
-
-# Support both local and cloud deployment
 firebase_creds = os.environ.get('FIREBASE_CREDENTIALS')
 if firebase_creds:
     cred_dict = json.loads(firebase_creds)
