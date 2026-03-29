@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────
-const API_BASE = 'http://10.16.7.230:5000/api';
+const API_BASE = 'https://voxvend-inventory.onrender.com';
 // ⚠️ Change this IP if your Flask server IP changes!
 
 let allSnacks = [];
