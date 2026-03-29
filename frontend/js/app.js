@@ -1,3 +1,44 @@
+// ─── NOTIFICATIONS SETUP ──────────────────
+async function setupNotifications() {
+  try {
+    const { LocalNotifications } = window.Capacitor?.Plugins || {};
+    if (!LocalNotifications) return;
+
+    const permission = await LocalNotifications.requestPermissions();
+    console.log('Notification permission:', permission.display);
+  } catch (e) {
+    console.log('Notifications not available:', e);
+  }
+}
+
+async function sendLowStockNotification(items) {
+  try {
+    const { LocalNotifications } = window.Capacitor?.Plugins || {};
+
+    // Vibrate the phone
+    if (navigator.vibrate) {
+      navigator.vibrate([400, 200, 400, 200, 400]);
+    }
+
+    if (!LocalNotifications) return;
+
+    const notifications = items.map((item, index) => ({
+      title: '⚠️ VoxVend Low Stock Alert!',
+      body: `${item.name} only has ${item.stock} left! Please restock soon.`,
+      id: index + 1,
+      schedule: { at: new Date(Date.now() + 500) },
+      sound: 'default',
+      actionTypeId: '',
+      extra: null
+    }));
+
+    await LocalNotifications.schedule({ notifications });
+  } catch (e) {
+    console.log('Notification error:', e);
+  }
+}
+
+
 // ─── CONFIG ───────────────────────────────
 const API_BASE = 'https://voxvend-inventory.onrender.com';
 // ⚠️ Change this IP if your Flask server IP changes!
@@ -9,12 +50,22 @@ let lowStockAlerted = false;
 
 // ─── INIT ─────────────────────────────────
 window.addEventListener('load', () => {
+  setupNotifications();
   setTimeout(() => {
     document.getElementById('splash').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     loadDashboard();
+    // Check low stock every 5 minutes automatically
+    setInterval(checkLowStockSilently, 5 * 60 * 1000);
   }, 2500);
 });
+
+async function checkLowStockSilently() {
+  const stats = await api('/stats');
+  if (stats && stats.low_stock_alerts.length > 0) {
+    sendLowStockNotification(stats.low_stock_alerts);
+  }
+}
 
 // ─── NAVIGATION ───────────────────────────
 function navigate(page, btn) {
@@ -126,9 +177,10 @@ async function loadDashboard() {
 
     // Trigger vibration + sound only once per session
     if (!lowStockAlerted) {
-      lowStockAlerted = true;
-      triggerLowStockAlert(stats.low_stock_alerts);
-    }
+        lowStockAlerted = true;
+        triggerLowStockAlert(stats.low_stock_alerts);
+        sendLowStockNotification(stats.low_stock_alerts);
+}
   } else {
     badge.style.display = 'none';
   }
