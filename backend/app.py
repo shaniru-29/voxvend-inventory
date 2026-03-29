@@ -7,7 +7,17 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-cred = credentials.Certificate("serviceAccountKey.json")
+import os
+import json
+
+# Support both local and cloud deployment
+firebase_creds = os.environ.get('FIREBASE_CREDENTIALS')
+if firebase_creds:
+    cred_dict = json.loads(firebase_creds)
+    cred = credentials.Certificate(cred_dict)
+else:
+    cred = credentials.Certificate("serviceAccountKey.json")
+
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
